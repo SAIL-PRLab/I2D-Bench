@@ -1,0 +1,10 @@
+# 数据集配置
+target_text: "data/LibriTTS/test_clean/target_text"
+ref_wav: "data/LibriTTS/test_clean/ref_wav.scp"
+ref_text: "data/LibriTTS/test_clean/ref_text"
+output_base: "data/LibriTTS/test_clean"
+results_base: "results/LibriTTS/test_clean"
+max_iterations: 10
+metrics: "spk_similarity wer utmosv2 dns_overall"
+metrics_config: "configs/LibriTTS/test_clean/metrics.yaml"
+language: "en"

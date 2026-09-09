@@ -1,0 +1,10 @@
+# 数据集配置
+target_text: "data/test_set/target_text"
+ref_wav: "data/test_set/ref_wav.scp"
+ref_text: "data/test_set/ref_text"
+output_base: "data/test_set"
+results_base: "results/test_set"
+max_iterations: 3
+metrics: "spk_similarity wer utmosv2 dns_overall"
+metrics_config: "configs/test_set/metrics.yaml"
+language: "en"

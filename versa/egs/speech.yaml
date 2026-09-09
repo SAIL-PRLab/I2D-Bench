@@ -1,0 +1,91 @@
+# codec example yaml config
+
+# mcd f0 related metrics
+#  -- mcd: mel cepstral distortion
+#  -- f0_corr: f0 correlation
+#  -- f0_rmse: f0 root mean square error
+- name: mcd_f0
+  f0min: 40
+  f0max: 800
+  mcep_shift: 5
+  mcep_fftl: 1024
+  mcep_dim: 39
+  mcep_alpha: 0.466
+  seq_mismatch_tolerance: 0.1
+  power_threshold: -20
+  dtw: false
+
+# signal related metrics
+# -- sir: signal to interference ratio
+# -- sar: signal to artifact ratio
+# -- sdr: signal to distortion ratio
+# -- ci-sdr: scale-invariant signal to distortion ratio
+# -- si-snri: scale-invariant signal to noise ratio improvement
+- name: signal_metric
+
+# pesq related metrics
+# -- pesq: perceptual evaluation of speech quality
+- name: pesq
+
+# stoi related metrics
+# -- stoi: short-time objective intelligibility
+- name: stoi
+
+# discrete speech metrics
+# -- speech_bert: speech bert score
+# -- speech_bleu: speech bleu score
+# -- speech_token_distance: speech token distance score
+- name: discrete_speech
+
+# pseudo subjective metrics
+# -- utmos: UT-MOS score
+# -- dnsmos: DNS-MOS score
+# -- plcmos: PLC-MOS score
+- name: pseudo_mos
+  predictor_types: ["utmos", "dnsmos", "plcmos", "dnsmos_pro_bvcc", "dnsmos_pro_nisqa", "dnsmos_pro_vcc2018"]
+  predictor_args:
+    utmos:
+      fs: 16000
+    dnsmos:
+      fs: 16000
+    plcmos:
+      fs: 16000
+
+# speaker related metrics
+# -- spk_similarity: speaker cosine similarity
+#                    model tag can be any ESPnet-SPK huggingface repo at 
+#                    https://huggingface.co/espnet
+- name: speaker
+  model_tag: default
+
+# torchaudio-squim
+# -- torch_squim_pesq: reference-less pesq
+# -- torch_squim_stoi: reference-less stoi
+# -- torch_squim_si_sdr: reference-less si-sdr
+# -- torch_squim_mos: MOS score with reference
+- name: squim_ref
+- name: squim_no_ref
+
+# An overall model on MOS-bench from Sheet toolkit
+# More info in https://github.com/unilight/sheet/tree/main
+# --sheet_ssqa: the mos prediction from sheet_ssqa
+- name: sheet_ssqa
+
+# torch-log-wmse 
+# -- log-wmse: the log of a frequency-weighted Mean Squared Error (MSE)
+# - name: log_wmse
+
+# Speech Enhancement-based Metrics
+# model tag can be any ESPnet-SE huggingface repo
+# -- se_sdr: the SDR from a reference speech enhancement model
+# -- se_sar: the SAR from a reference speech enhancement model
+# -- se_ci_sdr: the CI-SDR from a reference speech enhancement model
+# -- se_si_snr: the SI-SNR from a rerference speech enhancement model
+- name: se_snr
+  model_tag: default
+
+# DPAM and CDPAM distance metrics
+# -- dpam: deep perceptual audio metric
+# -- cdpam: contrastive deep perceptual audio metric
+- name: dpam
+- name: cdpam

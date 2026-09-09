@@ -1,0 +1,38 @@
+# Word error rate with OpenAI-Whisper model
+# More model_tag can be from https://github.com/openai/whisper?tab=readme-ov-file#available-models-and-languages .
+# The default model is `large-v3`.
+# NOTE(jiatong): further aggregation are necessary for corpus-level WER/CER
+# --whisper_hyp_text: the hypothesis from ESPnet ASR decoding
+# --ref_text: reference text (after cleaner)
+# --whisper_wer_delete: delete errors
+# --whisper_wer_insert: insertion errors
+# --whisper_wer_replace: replacement errors
+# --whisper_wer_equal: correct matching words/character counts
+# --whisper_cer_delete: delete errors
+# --whisper_cer_insert: insertion errors
+# --whisper_cer_replace: replacement errors
+# --whisper_cer_equal: correct matching words/character counts
+- name: whisper_wer
+  model_tag: large-v3
+  beam_size: 5
+  text_cleaner: whisper_en
+
+# speaker related metrics
+# -- spk_similarity: speaker cosine similarity
+#                    model tag can be any ESPnet-SPK huggingface repo at 
+#                    https://huggingface.co/espnet
+- name: speaker
+  model_tag: default
+  model_path: ../checkpoints/voxcelebs12_rawnet3/save_exp/spk_train_rawnet3_best_trnVox12_emb192_amp_subcentertopk_raw_sp/40epoch.pth
+  model_config: ../checkpoints/voxcelebs12_rawnet3/save_exp/spk_train_rawnet3_best_trnVox12_emb192_amp_subcentertopk_raw_sp/config.yaml
+
+# pseudo subjective metrics
+# -- utmosv2: UT-MOSv2 score
+# -- dnsmos: DNS-MOS score
+- name: pseudo_mos
+  predictor_types: ["utmosv2", "dnsmos"]
+  predictor_args:
+    utmosv2:
+      fs: 16000
+    dnsmos:
+      fs: 16000  

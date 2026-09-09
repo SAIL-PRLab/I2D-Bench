@@ -1,0 +1,25 @@
+
+# Audiobox Aesthetics (Unified automatic quality assessment for speech, music, and sound.)
+# Check https://github.com/facebookresearch/audiobox-aesthetics.git for original release.
+# We use our own interface at https://github.com/ftshijt/audiobox-aesthetics.git
+- name: audiobox_aesthetics
+  batch_size: 1
+  cache_dir: versa_cache/audiobox
+
+- name: pseudo_mos
+  predictor_types: ["singmos_pro", "singmos_v1"]
+
+# An overall model on MOS-bench from Sheet toolkit
+# More info in https://github.com/unilight/sheet/tree/main
+# --sheet_ssqa: the mos prediction from sheet_ssqa
+- name: sheet_ssqa
+
+# speaker related metrics
+# -- spk_similarity: speaker cosine similarity
+#                    model tag can be any ESPnet-SPK huggingface repo at 
+#                    https://huggingface.co/espnet
+- name: speaker
+  model_tag: default
+
+- name: qwen2_audio_singing_technique
+- name: qwen_omni_singing_technique

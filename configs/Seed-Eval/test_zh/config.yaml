@@ -1,0 +1,11 @@
+# 数据集配置
+target_text: "data/Seed-Eval/test_zh/target_text"
+ref_wav: "data/Seed-Eval/test_zh/ref_wav.scp"
+ref_text: "data/Seed-Eval/test_zh/ref_text"
+output_base: "data/Seed-Eval/test_zh"
+results_base: "results/Seed-Eval/test_zh"
+max_iterations: 10
+metrics: "spk_similarity cer utmosv2 dns_overall"
+metrics_config: "configs/Seed-Eval/test_zh/metrics.yaml"
+language: "zh"
+wavlm_checkpoint: "checkpoints/wavlm_large_finetune.pth"

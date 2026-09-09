@@ -1,0 +1,10 @@
+# 数据集配置
+target_text: "data/CV3-Eval/emotion_zeroshot/target_text"
+ref_wav: "data/CV3-Eval/emotion_zeroshot/ref_wav.scp"
+ref_text: "data/CV3-Eval/emotion_zeroshot/ref_text"
+output_base: "data/CV3-Eval/emotion_zeroshot"
+results_base: "results/CV3-Eval/emotion_zeroshot"
+max_iterations: 10
+metrics: "angry_f1 happy_f1 sad_f1 weighted_f1"
+metrics_config: "configs/CV3-Eval/emotion_zeroshot/metrics.yaml"
+run_eval_emotion: true

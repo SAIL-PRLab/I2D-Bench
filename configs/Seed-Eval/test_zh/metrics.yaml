@@ -1,0 +1,10 @@
+# pseudo subjective metrics
+# -- utmosv2: UT-MOSv2 score
+# -- dnsmos: DNS-MOS score
+- name: pseudo_mos
+  predictor_types: ["utmosv2", "dnsmos"]
+  predictor_args:
+    utmosv2:
+      fs: 16000
+    dnsmos:
+      fs: 16000  

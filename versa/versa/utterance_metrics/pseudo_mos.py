@@ -1,0 +1,392 @@
+#!/usr/bin/env python3
+
+# Copyright 2023 Takaaki Saeki
+# Copyright 2024 Jiatong Shi
+# Copyright 2025 Jionghao Han
+#  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
+
+import os
+import logging
+
+# Comprehensive threading control - set before ANY imports
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["NUMBA_NUM_THREADS"] = "1"
+
+logger = logging.getLogger(__name__)
+
+import librosa
+import numpy as np
+import torch
+import requests
+from pathlib import Path
+from typing import Optional
+
+# Force single threading for all compute libraries
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
+# Force librosa to use single thread
+if hasattr(librosa, 'set_num_threads'):
+    librosa.set_num_threads(1)
+
+try:
+    import utmosv2
+    from utmosv2.dataset.multi_spec import process_audio_only_versa
+except ImportError:
+    logger.info(
+        "utmosv2 is not installed, please install via `tools/install_utmosv2.sh`"
+    )
+    utmosv2 = None
+
+
+def pseudo_mos_setup(
+    predictor_types, predictor_args, cache_dir="versa_cache", use_gpu=True
+):
+    # Supported predictor types: utmos, dnsmos, aecmos, plcmos
+    # Predictor args: predictor specific args
+    predictor_dict = {}
+    predictor_fs = {}
+    if use_gpu:
+        device = "cuda"
+    else:
+        device = "cpu"
+    logger.info(f"Setting up pseudo MOS predictors on {device}")
+
+    # first import utmos to resolve cross-import from the same model
+    if "utmos" in predictor_types:
+        torch.hub.set_dir(cache_dir)
+        utmos = torch.hub.load("ftshijt/SpeechMOS:main", "utmos22_strong").to(device)
+        predictor_dict["utmos"] = utmos.float()
+        predictor_fs["utmos"] = 16000
+    if "utmosv2" in predictor_types:
+        if utmosv2 is None:
+            raise RuntimeError(
+                "utmosv2 is not installed. Please follow `tools/install_utmosv2.sh` to install"
+            )
+        # NOTE(jiatong): if you have an error of `_pickle.UnpicklingError: invalid load key, 'v'.`
+        # It is likely that you did not have `git lfs` properly setup. Please check
+        # https://github.com/sarulab-speech/UTMOSv2?tab=readme-ov-file#---quick-prediction--------
+        utmos_v2 = utmosv2.create_model(pretrained=True)
+        # _cfg = importlib.import_module(f"utmosv2.config.fusion_stage3")
+        # cfg = SimpleNamespace(
+        #     **{k: v for k, v in _cfg.__dict__.items() if not k.startswith("__")}
+        # )
+        # utmosv2._settings.configure_execution(cfg)
+        predictor_dict["utmosv2"] = utmos_v2.to(device)
+        predictor_fs["utmosv2"] = 16000
+
+    if (
+        "aecmos" in predictor_types
+        or "dnsmos" in predictor_types
+        or "plcmos" in predictor_types
+    ):
+        try:
+            import onnxruntime as ort
+            
+            # More aggressive ONNX Runtime thread control
+            if not getattr(ort, "_versa_configured", False):
+                # Set global ONNX Runtime options
+                ort.set_default_logger_severity(3)  # ERROR level only
+                
+                # Patch InferenceSession creation
+                _orig_inference_session = ort.InferenceSession
+
+                def _patched_inference_session(*args, **kwargs):
+                    sess_options = kwargs.get("sess_options")
+                    if sess_options is None:
+                        sess_options = ort.SessionOptions()
+                    
+                    # Aggressive threading control
+                    sess_options.intra_op_num_threads = 1
+                    sess_options.inter_op_num_threads = 1
+                    sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+                    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+                    
+                    kwargs["sess_options"] = sess_options
+                    return _orig_inference_session(*args, **kwargs)
+
+                ort.InferenceSession = _patched_inference_session
+                ort._versa_configured = True
+
+            from speechmos import dnsmos, plcmos
+        except ImportError:
+            raise ImportError(
+                "Please install speechmos for dnsmos, and plcmos: pip install speechmos onnxruntime"
+            )
+
+    for predictor in predictor_types:
+        if predictor == "dnsmos":
+            predictor_dict["dnsmos"] = dnsmos
+            if "dnsmos" not in predictor_args:
+                predictor_fs["dnsmos"] = 16000
+            else:
+                predictor_fs["dnsmos"] = predictor_args["dnsmos"]["fs"]
+        elif predictor == "plcmos":
+            predictor_dict["plcmos"] = plcmos
+            if "plcmos" not in predictor_args:
+                predictor_fs["plcmos"] = 16000
+            else:
+                predictor_fs["plcmos"] = predictor_args["plcmos"]["fs"]
+        elif predictor == "utmos" or predictor == "utmosv2":
+            continue  # already initialized
+        elif predictor == "singmos_v1":
+            torch.hub.set_dir(cache_dir)
+            singmos = torch.hub.load(
+                "South-Twilight/SingMOS:v1.1.1", "singmos_v1", trust_repo=True
+            ).to(device)
+            predictor_dict["singmos_v1"] = singmos
+            predictor_fs["singmos_v1"] = 16000
+        elif predictor == "singmos_pro":
+            torch.hub.set_dir(cache_dir)
+            singmos = torch.hub.load(
+                "South-Twilight/SingMOS:v1.1.1", "singmos_pro", trust_repo=True
+            ).to(device)
+            predictor_dict["singmos_pro"] = singmos
+            predictor_fs["singmos_pro"] = 16000
+        elif predictor.startswith("dnsmos_pro_"):
+            variant = predictor[len("dnsmos_pro_") :]
+            model_path = Path(cache_dir) / f"dnsmos_pro_{variant}.pt"
+            if not model_path.exists():
+                url = f"https://github.com/fcumlin/DNSMOSPro/raw/refs/heads/main/runs/{variant.upper()}/model_best.pt"
+                model_path.parent.mkdir(parents=True, exist_ok=True)
+                logger.info(f'Downloading: "{url}" to {model_path}')
+                response = requests.get(url)
+                with open(model_path, "wb") as f:
+                    f.write(response.content)
+            else:
+                logger.info(f"Using cached model: {model_path}")
+            
+            # Load with explicit single thread for JIT
+            with torch.jit.optimized_execution(False):
+                jit_model = torch.jit.load(model_path, map_location=device)
+                # Ensure JIT model uses single thread
+                if hasattr(jit_model, '_set_num_threads'):
+                    jit_model._set_num_threads(1)
+                predictor_dict[predictor] = jit_model
+            predictor_fs[predictor] = 16000
+        else:
+            raise NotImplementedError("Not supported {}".format(predictor))
+
+    return predictor_dict, predictor_fs
+
+
+def pseudo_mos_metric(pred, fs, predictor_dict, predictor_fs, use_gpu=True):
+    scores = {}
+    
+    # Set threading for this process again (defensive)
+    torch.set_num_threads(1)
+    
+    for predictor in predictor_dict.keys():
+        if predictor == "utmos":
+            if fs != predictor_fs["utmos"]:
+                # Force single thread for librosa
+                with torch.inference_mode():
+                    pred_utmos = librosa.resample(
+                        pred, orig_sr=fs, target_sr=predictor_fs["utmos"]
+                    )
+            else:
+                pred_utmos = pred
+            
+            with torch.inference_mode():
+                pred_tensor = torch.from_numpy(pred_utmos).unsqueeze(0)
+                if use_gpu:
+                    pred_tensor = pred_tensor.to("cuda")
+                score = predictor_dict["utmos"](pred_tensor.float(), predictor_fs["utmos"])[0].item()
+            scores.update(utmos=score)
+
+        elif predictor == "utmosv2":
+            if fs != predictor_fs["utmosv2"]:
+                with torch.inference_mode():
+                    pred_utmosv2 = librosa.resample(
+                        pred, orig_sr=fs, target_sr=predictor_fs["utmosv2"]
+                    )
+            else:
+                pred_utmosv2 = pred
+
+            if utmosv2 is not None:
+                cfg = predictor_dict["utmosv2"].cfg
+                spec_info = process_audio_only_versa(pred_utmosv2, cfg)
+                spec_info = torch.tensor(spec_info).float().unsqueeze(0)
+
+                # magic number of data types
+                # defined at https://github.com/ftshijt/UTMOSv2/blob/main/utmosv2/dataset/_utils.py#L8
+                data_type = np.zeros(10)
+                # we use general version dataset label: sarulab (1)
+                data_type[1] = 0
+                d = torch.tensor(data_type, dtype=torch.float32).unsqueeze(0)
+                if use_gpu:
+                    spec_info = spec_info.to("cuda")
+                    d = d.to("cuda")
+            else:
+                raise RuntimeError(
+                    "utmosv2 is not installed. Use tools/install_utmosv2.sh to install."
+                )
+
+            pred_tensor = torch.from_numpy(pred_utmosv2).unsqueeze(0)
+            if use_gpu:
+                pred_tensor = pred_tensor.to("cuda")
+
+            NUM_REPETITIONS = 5
+            with torch.inference_mode():
+                score_info = []
+                for i in range(NUM_REPETITIONS):
+                    score_info.append(
+                        predictor_dict["utmosv2"](pred_tensor.float(), spec_info, d)
+                        .squeeze(1)
+                        .cpu()
+                        .numpy()[0]
+                    )
+            scores.update(utmosv2=sum(score_info) / NUM_REPETITIONS)
+
+        elif predictor == "dnsmos":
+            if fs != predictor_fs["dnsmos"]:
+                pred_dnsmos = librosa.resample(
+                    pred, orig_sr=fs, target_sr=predictor_fs["dnsmos"]
+                )
+                fs_local = predictor_fs["dnsmos"]
+            else:
+                pred_dnsmos = pred
+                fs_local = fs
+
+            max_val = np.max(np.abs(pred_dnsmos))
+            if max_val > 0:
+                score = predictor_dict["dnsmos"].run(pred_dnsmos / max_val, sr=fs_local)
+            else:
+                score = {"ovrl_mos": 0.0, "p808_mos": 0.0}
+
+            scores.update(dns_overall=score["ovrl_mos"], dns_p808=score["p808_mos"])
+            
+        elif predictor == "plcmos":
+            if fs != predictor_fs["plcmos"]:
+                pred_plcmos = librosa.resample(
+                    pred, orig_sr=fs, target_sr=predictor_fs["plcmos"]
+                )
+                fs_local = predictor_fs["plcmos"]
+            else:
+                pred_plcmos = pred
+                fs_local = fs
+
+            max_val = np.max(np.abs(pred_plcmos))
+            if max_val > 0:
+                score = predictor_dict["plcmos"].run(pred_plcmos / max_val, sr=fs_local)
+            else:
+                score = {"plcmos": 0.0}
+            scores.update(plcmos=score["plcmos"])
+            
+        elif predictor == "singmos_v1":
+            if fs != predictor_fs["singmos_v1"]:
+                pred_singmos = librosa.resample(
+                    pred, orig_sr=fs, target_sr=predictor_fs["singmos_v1"]
+                )
+            else:
+                pred_singmos = pred
+                
+            with torch.inference_mode():
+                pred_tensor = torch.from_numpy(pred_singmos).unsqueeze(0)
+                length_tensor = torch.tensor([pred_tensor.size(1)]).int()
+                if use_gpu:
+                    pred_tensor = pred_tensor.to("cuda")
+                    length_tensor = length_tensor.to("cuda")
+                score = predictor_dict["singmos_v1"](pred_tensor.float(), length_tensor)[0].item()
+            scores.update(singmos_v1=score)
+            
+        elif predictor == "singmos_pro":
+            if fs != predictor_fs["singmos_pro"]:
+                pred_singmos = librosa.resample(
+                    pred, orig_sr=fs, target_sr=predictor_fs["singmos_pro"]
+                )
+            else:
+                pred_singmos = pred
+                
+            with torch.inference_mode():
+                pred_tensor = torch.from_numpy(pred_singmos).unsqueeze(0)
+                length_tensor = torch.tensor([pred_tensor.size(1)]).int()
+                if use_gpu:
+                    pred_tensor = pred_tensor.to("cuda")
+                    length_tensor = length_tensor.to("cuda")
+                score = predictor_dict["singmos_pro"](pred_tensor.float(), length_tensor)[0].item()
+            scores.update(singmos_pro=score)
+            
+        elif predictor.startswith("dnsmos_pro_"):
+            if fs != predictor_fs[predictor]:
+                pred_dnsmos_pro = librosa.resample(
+                    pred, orig_sr=fs, target_sr=predictor_fs[predictor]
+                )
+            else:
+                pred_dnsmos_pro = pred
+
+            def stft(
+                samples: np.ndarray,
+                win_length: int = 320,
+                hop_length: int = 160,
+                n_fft: int = 320,
+                use_log: bool = True,
+                use_magnitude: bool = True,
+                n_mels: Optional[int] = None,
+            ) -> np.ndarray:
+                if use_log and not use_magnitude:
+                    raise ValueError(
+                        "Log is only available if the magnitude is to be computed."
+                    )
+                if n_mels is None:
+                    spec = librosa.stft(
+                        y=samples,
+                        win_length=win_length,
+                        hop_length=hop_length,
+                        n_fft=n_fft,
+                    )
+                else:
+                    spec = librosa.feature.melspectrogram(
+                        y=samples,
+                        win_length=win_length,
+                        hop_length=hop_length,
+                        n_fft=n_fft,
+                        n_mels=n_mels,
+                    )
+                spec = spec.T
+                if use_magnitude:
+                    spec = np.abs(spec)
+                if use_log:
+                    spec = np.clip(spec, 10 ** (-7), 10**7)
+                    spec = np.log10(spec)
+                return spec
+
+            with torch.inference_mode():
+                spec = torch.FloatTensor(stft(pred_dnsmos_pro))
+                if use_gpu:
+                    spec = spec.to("cuda")
+                prediction = predictor_dict[predictor](spec[None, None, ...])
+            scores[predictor] = prediction[0, 0].item()
+        else:
+            raise NotImplementedError("Not supported {}".format(predictor))
+
+    return scores
+
+
+if __name__ == "__main__":
+    a = np.random.random(16000)
+    print(a)
+    predictor_dict, predictor_fs = pseudo_mos_setup(
+        [
+            "utmos",
+            "dnsmos",
+            "plcmos",
+            "singmos_v1",
+            "singmos_pro",
+            "dnsmos_pro_bvcc",
+            "dnsmos_pro_nisqa",
+            "dnsmos_pro_vcc2018",
+        ],
+        predictor_args={
+            "dnsmos": {"fs": 16000},
+            "plcmos": {"fs": 16000},
+        },
+    )
+    scores = pseudo_mos_metric(
+        a, fs=16000, predictor_dict=predictor_dict, predictor_fs=predictor_fs
+    )
+    print("metrics: {}".format(scores))

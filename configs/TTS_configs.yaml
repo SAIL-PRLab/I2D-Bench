@@ -1,0 +1,87 @@
+# TTS模型配置文件
+# 用于管理不同TTS系统的环境、代码路径和模型参数
+
+# CosyVoice配置
+CosyVoice:
+  venv_path: "/path/to/CosyVoice/.venv/bin/activate"
+  script_path: "src/cosyvoice_tts.py"
+  model_path: "/path/to/CosyVoice/pretrained_models/CosyVoice-300M"
+
+# CosyVoice2配置
+CosyVoice2:
+  venv_path: "/path/to/CosyVoice/.venv/bin/activate"
+  script_path: "src/cosyvoice_tts.py"
+  model_path: "/path/to/CosyVoice/pretrained_models/CosyVoice2-0.5B"
+
+# CosyVoice3配置
+CosyVoice3:
+  venv_path: "/path/to/CosyVoice/.venv/bin/activate"
+  script_path: "src/cosyvoice_tts.py"
+  model_path: "/path/to/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B"
+
+# CosyVoice3-RL配置
+CosyVoice3-RL:
+  venv_path: "/path/to/CosyVoice/.venv/bin/activate"
+  script_path: "src/cosyvoice_tts.py"
+  model_path: "/path/to/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B-RL"
+
+# IndexTTS2配置
+IndexTTS2:
+  venv_path: "/path/to/index-tts/.venv/bin/activate"
+  script_path: "src/index_tts.py"
+  model_path: "/path/to/index-tts/checkpoints"
+
+# F5-TTS配置
+F5-TTS:
+  venv_path: "/path/to/F5-TTS/.venv/bin/activate"
+  script_path: "src/f5tts.py"
+  model_path: "/path/to/F5-TTS"
+
+# FireRedTTS2配置
+FireRedTTS2:
+  venv_path: "/path/to/FireRedTTS2/.venv/bin/activate"
+  script_path: "src/firered_tts2.py"
+  model_path: "/path/to/FireRedTTS2/pretrained_models/FireRedTTS2"
+
+# MaskGCT配置
+MaskGCT:
+  venv_path: "/path/to/Amphion/.venv/bin/activate"
+  script_path: "src/maskgct_tts.py"
+  model_path: "/path/to/Amphion/models/tts/maskgct"
+
+# VoxCPM配置
+VoxCPM:
+  venv_path: "/path/to/VoxCPM/.venv/bin/activate"
+  script_path: "src/voxcpm_tts.py"
+  model_path: "/path/to/VoxCPM/model/VoxCPM1.5/models--openbmb--VoxCPM1.5/snapshots/0772fc33615229ff5d349b80f2f4ac3a1f9cb3d7"
+
+# GLM-TTS配置
+GLM-TTS:
+  venv_path: "/path/to/GLM-TTS/.venv/bin/activate"
+  script_path: "src/glm_tts.py"
+  model_path: "/path/to/GLM-TTS/ckpt"
+
+# Qwen3-TTS配置
+Qwen3-TTS:
+  venv_path: "/root/Project/Qwen3-TTS/.venv/bin/activate"
+  script_path: "src/qwen3_tts.py"
+  model_path: "/root/Project/Qwen3-TTS/models/Qwen3-TTS-12Hz-1.7B-Base"
+
+# GT配置
+GT:
+  venv_path: "/root/Project/dots.tts/.venv/bin/activate"
+  script_path: "None"
+  model_path: "None"
+# 测试配置
+test_tts:
+  venv_path: "/root/Project/dots.tts/.venv/bin/activate"
+  script_path: "None"
+  model_path: "None"
+
+# dots.tts 配置（https://github.com/studio-dots-ai/dots.tts）
+# 默认使用 HuggingFace 上的 dots.tts-soar（README 标注 SIM 最高）。
+# 也可以改成其它 ckpt 或本地 snapshot 路径。
+dots-tts:
+  venv_path: "/root/Project/dots.tts/.venv/bin/activate"
+  script_path: "src/dots_tts_proc.py"
+  model_path: "dots-studio/dots.tts-soar"

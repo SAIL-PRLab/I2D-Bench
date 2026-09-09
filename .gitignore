@@ -1,0 +1,68 @@
+# Codex CLI local config
+/.agents/
+/.codex/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.installed.cfg
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Build / dist
+build/
+dist/
+
+# Logs and runtime artifacts
+*.log
+logs/
+*.out
+*.err
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Experiment / evaluation outputs (commonly regenerated)
+results/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.bin
+runs/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# 注意：未忽略 versa/ CV3-Eval/ → 跟着远程一起入库
+# data/ 里只跟踪冒烟测试 data/test_set/；其它三个数据集由 scripts/prepare_dataset.sh 拉取
+data/
+!data/test_set/
+
+# Stage 4 (CER/SIM) 依赖，由 scripts/prepare_dataset.sh Seed-Eval 拉取
+seed-tts-eval/
+
+# 本地模型/包缓存（huggingface / pip / whisper 等），按需重新下载
+.cache/
